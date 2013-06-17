@@ -118,6 +118,11 @@ bool ParseFileName(const std::string& fname,
   return true;
 }
 
+// comment by donzell.用一个临时文件，先把数据都写进去，fsync完成之后，再rename。
+// rename保证原子性。这就是典型的shadow paging 技术。
+// TODO 不知道rename完了如果系统掉电了，文件名改动会不会已经在磁盘上生效了，
+// 因为rename也需要修改目录文件吧，目录本身也是个文件啊，不fsync的话会有问题吗？
+    
 Status SetCurrentFile(Env* env, const std::string& dbname,
                       uint64_t descriptor_number) {
   // Remove leading "dbname/" and add newline to manifest file name

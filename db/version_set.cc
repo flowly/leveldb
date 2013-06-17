@@ -67,7 +67,7 @@ std::string IntSetToString(const std::set<uint64_t>& s) {
   return result;
 }
 }  // namespace
-
+    // 主要是unref FileMetaData
 Version::~Version() {
   assert(refs_ == 0);
 
@@ -87,7 +87,7 @@ Version::~Version() {
     }
   }
 }
-
+    // 二分搜索，没啥看的
 int FindFile(const InternalKeyComparator& icmp,
              const std::vector<FileMetaData*>& files,
              const Slice& key) {
@@ -577,7 +577,7 @@ class VersionSet::Builder {
     }
     base_->Unref();
   }
-
+    // 覆盖成新的compact_pointer；合并deleted_files；合并add_files
   // Apply all of the edits in *edit to the current state.
   void Apply(VersionEdit* edit) {
     // Update compaction pointers
@@ -618,7 +618,7 @@ class VersionSet::Builder {
       // of data before triggering a compaction.
       f->allowed_seeks = (f->file_size / 16384);
       if (f->allowed_seeks < 100) f->allowed_seeks = 100;
-
+// comment by donzell.上面deleted_files_已经合并了，这里用added_files覆盖了deleted_files中的一些file，如果新文件总是不复用之前的filenumber其实erase不能成功吧，因为每个文件的filenumber都不一样，但是作者这里erase，说明要add的file可能出现在了deleted_files中，为什么呢？；added_files Apply过程中只增不减，一定是在其他地方把deleted_files合并过来的。see SaveTo
       levels_[level].deleted_files.erase(f->number);
       levels_[level].added_files->insert(f);
     }
@@ -636,6 +636,7 @@ class VersionSet::Builder {
       std::vector<FileMetaData*>::const_iterator base_end = base_files.end();
       const FileSet* added = levels_[level].added_files;
       v->files_[level].reserve(base_files.size() + added->size());
+// comment by donzell.以下这段代码是排序的merge。保证按照顺序add.MaybeAddFile会检查是否deleted。
       for (FileSet::const_iterator added_iter = added->begin();
            added_iter != added->end();
            ++added_iter) {
@@ -762,6 +763,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
   std::string new_manifest_file;
   Status s;
   if (descriptor_log_ == NULL) {
+      // comment by donzell.  把recover出来的状态记录下来，注意没有fsync.
     // No reason to unlock *mu here since we only hit this path in the
     // first call to LogAndApply (when opening the database).
     assert(descriptor_file_ == NULL);
@@ -780,6 +782,7 @@ Status VersionSet::LogAndApply(VersionEdit* edit, port::Mutex* mu) {
 
     // Write new record to MANIFEST log
     if (s.ok()) {
+        // comment by donzell.把recover后的，从log中回放record之后又形成的edit写入。注意了，这里sync了。但是如果CURRENT文件不能指向新的manifest文件，这一切还是不能在下次启动的时候生效。
       std::string record;
       edit->EncodeTo(&record);
       s = descriptor_log_->AddRecord(record);
@@ -930,8 +933,11 @@ Status VersionSet::Recover() {
     Version* v = new Version(this);
     builder.SaveTo(v);
     // Install recovered version
+    // comment by donzell. 只是计算一些权值，供compact使用.
     Finalize(v);
+    // comment by donzell. 把v作为current，然后安装到链表里，处理引用计数.
     AppendVersion(v);
+    // comment by donzell. 为什么把 manifest_file_number_ 设置?只有Open的时候会recover，然后虽然读取了manifest文件，却是直接读取的，没有经过manifest_file_number_ ,这里预留一个号，等recover完了，LogAndApply的时候发现descriptor_log_=NULL,就会使用到这个manifest_file_number_ 。
     manifest_file_number_ = next_file;
     next_file_number_ = next_file + 1;
     last_sequence_ = last_sequence;
@@ -984,7 +990,7 @@ void VersionSet::Finalize(Version* v) {
   v->compaction_level_ = best_level;
   v->compaction_score_ = best_score;
 }
-
+    // 构造一个versionedit,设置好Comparator,CompactPointer,因为是snapshot不是compact后的edit，只有AddFile，没有DeleteFile。AddFile都是直接来自current,相当于把current作为snapshot，写入record.
 Status VersionSet::WriteSnapshot(log::Writer* log) {
   // TODO: Break up into multiple records to reduce memory usage on recovery?
 
@@ -1403,7 +1409,7 @@ bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
       level_ptrs_[lvl]++;
     }
   }
-  return true;
+  Return true;
 }
 
 bool Compaction::ShouldStopBefore(const Slice& internal_key) {

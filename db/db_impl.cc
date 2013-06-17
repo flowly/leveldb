@@ -48,13 +48,15 @@ namespace leveldb {
 
     struct DBImpl::CompactionState {
         Compaction* const compaction;
+        // comment by donzell.所有snapshot里边最小的那个seq，如果一个操作的seq=S，S <= smallest_snapshot，那么相同key的seq<S的都可以丢弃了。
+        // 因为在S已经<=smallest_snapshot，S之下没有snapshot了，seq < S，之需要保留S即可。
 
         // Sequence numbers < smallest_snapshot are not significant since we
         // will never have to service a snapshot below smallest_snapshot.
         // Therefore if we have seen a sequence number S <= smallest_snapshot,
         // we can drop all entries for the same key with sequence numbers < S.
         SequenceNumber smallest_snapshot;
-
+        
         // Files produced by compaction
         struct Output {
             uint64_t number;
@@ -291,7 +293,7 @@ namespace leveldb {
                     dbname_, "exists (error_if_exists is true)");
             }
         }
-
+        // comment by donzell.成功后，versionset就恢复到了退出前的状态,还需1、检查是否缺少version中的文件2、回放log中的命令。
         s = versions_->Recover();
         if (s.ok()) {
             SequenceNumber max_sequence(0);
@@ -328,7 +330,7 @@ namespace leveldb {
                          static_cast<int>(expected.size()));
                 return Status::Corruption(buf, TableFileName(dbname_, *(expected.begin())));
             }
-
+            // comment by donzell.以上代码是要求versionset中出现的文件都必须在磁盘上有，也就是保存versionset时，一定是先把manifest文件刷到磁盘上之后，才能删除旧文件。see Open是在LogAndApply之后才DeleteObsoleteFiles的。
             // Recover in the order in which the logs were generated
             std::sort(logs.begin(), logs.end());
             for (size_t i = 0; i < logs.size(); i++) {
@@ -1429,6 +1431,7 @@ namespace leveldb {
                 impl->DeleteObsoleteFiles();
                 impl->MaybeScheduleCompaction();
             }
+            // comment by donzell.一定是先LogAndApply，把数据刷磁盘后才能DeleteObsoleteFiles();TODO 1、Log过程中写了一半系统掉电，manifest文件corrupt怎么办？2、使用rename后能保证附带sync吗？如果不能那这里其实是有危险的吧？
         }
         impl->mutex_.Unlock();
         if (s.ok()) {
