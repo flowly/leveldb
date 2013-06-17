@@ -67,10 +67,9 @@ SHARED2 = $(SHARED1)
 SHARED3 = $(SHARED1)
 SHARED = $(SHARED1)
 else
-# Update db.h if you change these.
 # just change db.h.DO NOT change here.
-SHARED_MAJOR = `grep  -o -P " kMajorVersion = \d+" include/db.h|cut -d "=" -f2;`
-SHARED_MINOR = `grep  -o -P "kMinorVersion = \d+" include/db.h|cut -d "=" -f2;`
+SHARED_MAJOR = $(shell grep  -o -P "kMajorVersion = (\d+)" include/leveldb/db.h|grep -o -P "\d+")
+SHARED_MINOR = $(shell grep  -o -P "kMinorVersion = (\d+)" include/leveldb/db.h|grep -o -P "\d+")
 SHARED1 = libleveldb.$(PLATFORM_SHARED_EXT)
 SHARED2 = $(SHARED1).$(SHARED_MAJOR)
 SHARED3 = $(SHARED1).$(SHARED_MAJOR).$(SHARED_MINOR)

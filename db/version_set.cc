@@ -1409,7 +1409,7 @@ bool Compaction::IsBaseLevelForKey(const Slice& user_key) {
       level_ptrs_[lvl]++;
     }
   }
-  Return true;
+  return true;
 }
 
 bool Compaction::ShouldStopBefore(const Slice& internal_key) {
