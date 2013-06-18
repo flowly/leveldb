@@ -33,6 +33,11 @@
 #include "util/logging.h"
 #include "util/mutexlock.h"
 
+// comment by donzell.如果没有compact，leveldb的逻辑真是简单优美.
+// write:先把WriteBatch序列化写入LOG,然后插入memtable。
+// read:先读memetable，然后level0,然后level 1-7.
+// 但是compact是必须的，每次compact生成一个新的version;
+
 namespace leveldb {
 
 // Information kept for every waiting writer
@@ -172,7 +177,7 @@ namespace leveldb {
             delete options_.block_cache;
         }
     }
-
+// comment by donzell.create_if_missing的时候调用。就是用一个空的versionedit作为manifest，然后把current指向此manifest.之后的Recover流程会把它作为Db状态
     Status DBImpl::NewDB() {
         VersionEdit new_db;
         new_db.SetComparatorName(user_comparator()->Name());
@@ -1133,7 +1138,8 @@ namespace leveldb {
     Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
         return DB::Delete(options, key);
     }
-
+    
+    // comment by donzell.简单优雅的写操作！只是对于锁的优化复杂些，原理是：获得锁的那个线程尽可能的顺带着帮队列里其他操作也执行了，当其他线程被唤醒时或得到锁时，必须是自己处于队列的front才有资格进行操作，否则继续等，或者是检查自己已经done了,那就是已经被别人顺带执行了，直接返回。强悍的批处理优化！
     Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
         Writer w(&mutex_);
         w.batch = my_batch;
